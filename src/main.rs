@@ -11,6 +11,7 @@ mod dispatch;
 mod state;
 
 use state::AppData;
+use wayland_client::protocol::wl_keyboard::KeyState;
 // The main function of our program
 fn main() {
     // Create a Wayland connection by connecting to the server through the
@@ -60,15 +61,15 @@ fn main() {
     // globals.
     event_loop
         .run(None, &mut data, |_shared_data| {
-            let timer = Timer::from_duration(std::time::Duration::from_secs(1));
+            let timer = Timer::from_duration(std::time::Duration::from_millis(10));
             handle
                 .insert_source(timer, |_dateline, _: &mut (), shared_data| {
                     shared_data
                         .virtual_keyboard
                         .as_ref()
                         .unwrap()
-                        .key(10, 10, 1);
-                    TimeoutAction::ToDuration(std::time::Duration::from_secs(1))
+                        .key(10000, 12, KeyState::Pressed.into());
+                    TimeoutAction::ToDuration(std::time::Duration::from_secs(100))
                 })
                 .expect("Timer failed");
         })
