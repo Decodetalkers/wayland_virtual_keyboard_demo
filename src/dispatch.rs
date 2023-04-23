@@ -1,4 +1,5 @@
 use crate::AppData;
+use std::os::unix::prelude::AsRawFd;
 #[allow(unused)]
 use wayland_client::{
     protocol::{
@@ -72,6 +73,12 @@ impl Dispatch<WlSeat, ()> for AppData {
     ) {
         if let Some(virtual_keyboard_manager) = state.virtual_keyboard_manager.as_ref() {
             let virtual_keyboard = virtual_keyboard_manager.create_virtual_keyboard(seat, qh, ());
+            let (file, size) = state.get_keymap_as_file();
+            virtual_keyboard.keymap(
+                wl_keyboard::KeymapFormat::XkbV1.into(),
+                file.as_raw_fd(),
+                size,
+            );
             state.virtual_keyboard = Some(virtual_keyboard);
         }
     }

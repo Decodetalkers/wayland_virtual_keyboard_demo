@@ -36,7 +36,7 @@ fn main() {
 
     // At this point everything is ready, and we just need to wait to receive the events
     // from the wl_registry, our callback will print the advertized globals.
-    let mut data = AppData::default();
+    let mut data = AppData::init();
     let mut event_loop: EventLoop<AppData> =
         EventLoop::try_new().expect("Failed to initialize the event loop!");
     let handle = event_loop.handle();
@@ -59,6 +59,18 @@ fn main() {
     // on, and thus invoke our `Dispatch` implementation that prints the list of advertized
     // globals.
     event_loop
-        .run(None, &mut data, |_shared_data| {})
+        .run(None, &mut data, |_shared_data| {
+            let timer = Timer::from_duration(std::time::Duration::from_secs(1));
+            handle
+                .insert_source(timer, |_dateline, _: &mut (), shared_data| {
+                    shared_data
+                        .virtual_keyboard
+                        .as_ref()
+                        .unwrap()
+                        .key(10, 10, 1);
+                    TimeoutAction::ToDuration(std::time::Duration::from_secs(1))
+                })
+                .expect("Timer failed");
+        })
         .expect("Error during event loop!");
 }
