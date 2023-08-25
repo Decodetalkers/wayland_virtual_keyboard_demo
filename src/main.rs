@@ -1,11 +1,4 @@
 use wayland_client::Connection;
-use wayland_client::WaylandSource;
-
-#[allow(unused)]
-use calloop::{
-    timer::{TimeoutAction, Timer},
-    EventLoop,
-};
 
 mod dispatch;
 mod state;
@@ -25,7 +18,7 @@ fn main() {
 
     // Create an event queue for our event processing
     // TODO: mut it
-    let event_queue = conn.new_event_queue();
+    let mut event_queue = conn.new_event_queue();
     // An get its handle to associated new objects to it
     let qh = event_queue.handle();
 
@@ -38,40 +31,24 @@ fn main() {
     // At this point everything is ready, and we just need to wait to receive the events
     // from the wl_registry, our callback will print the advertized globals.
     let mut data = AppData::init();
-    let mut event_loop: EventLoop<AppData> =
-        EventLoop::try_new().expect("Failed to initialize the event loop!");
-    let handle = event_loop.handle();
-    let wayland_source =
-        WaylandSource::new(event_queue).expect("Failed to add wayland event queue to calloop!");
+    while data.virtual_keyboard.is_none() {
+        event_queue.blocking_dispatch(&mut data).unwrap();
+    }
+    let mut pressed = false;
+    loop {
+        if pressed {
+            data.virtual_keyboard
+                .as_ref()
+                .unwrap()
+                .key(100, 10, KeyState::Pressed.into());
+        } else {
+            data.virtual_keyboard
+                .as_ref()
+                .unwrap()
+                .key(100, 10, KeyState::Released.into());
+        }
+        pressed = !pressed;
 
-    wayland_source
-        .insert(handle.clone())
-        .expect("Failed to insert wayland source into calloop handle");
-    // To actually receive the events, we invoke the `sync_roundtrip` method. This method
-    // is special and you will generally only invoke it during the setup of your program:
-    // it will block until the server has received and processed all the messages you've
-    // sent up to now.
-    //
-    // In our case, that means it'll block until the server has received our
-    // wl_display.get_registry request, and as a reaction has sent us a batch of
-    // wl_registry.global events.
-    //
-    // `sync_roundtrip` will then empty the internal buffer of the queue it has been invoked
-    // on, and thus invoke our `Dispatch` implementation that prints the list of advertized
-    // globals.
-    event_loop
-        .run(None, &mut data, |_shared_data| {
-            let timer = Timer::from_duration(std::time::Duration::from_millis(10));
-            handle
-                .insert_source(timer, |_dateline, _: &mut (), shared_data| {
-                    shared_data
-                        .virtual_keyboard
-                        .as_ref()
-                        .unwrap()
-                        .key(10000, 12, KeyState::Pressed.into());
-                    TimeoutAction::ToDuration(std::time::Duration::from_secs(100))
-                })
-                .expect("Timer failed");
-        })
-        .expect("Error during event loop!");
+        std::thread::sleep(std::time::Duration::from_nanos(100));
+    }
 }

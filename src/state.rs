@@ -21,7 +21,7 @@ impl AppData {
             &context,
             "",
             "",
-            "no",
+            "us",
             "",
             None,
             xkb::KEYMAP_COMPILE_NO_FLAGS,
