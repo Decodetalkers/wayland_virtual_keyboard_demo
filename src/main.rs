@@ -1,4 +1,4 @@
-use wayland_client::Connection;
+use wayland_client::{protocol::wl_pointer, Connection};
 
 mod dispatch;
 mod state;
@@ -31,24 +31,38 @@ fn main() {
     // At this point everything is ready, and we just need to wait to receive the events
     // from the wl_registry, our callback will print the advertized globals.
     let mut data = AppData::init();
-    while data.virtual_keyboard.is_none() {
+    while data.virtual_keyboard.is_none() || data.virtual_pointer.is_none() {
         event_queue.blocking_dispatch(&mut data).unwrap();
     }
     let mut pressed = false;
     loop {
-        if pressed {
-            data.virtual_keyboard
-                .as_ref()
-                .unwrap()
-                .key(100, 10, KeyState::Pressed.into());
-        } else {
-            data.virtual_keyboard
-                .as_ref()
-                .unwrap()
-                .key(100, 10, KeyState::Released.into());
-        }
         pressed = !pressed;
+        data.virtual_keyboard.as_ref().unwrap().key(
+            100,
+            10,
+            if pressed {
+                KeyState::Released.into()
+            } else {
+                KeyState::Pressed.into()
+            },
+        );
 
+        data.virtual_pointer.as_ref().unwrap().axis_discrete(
+            100,
+            wl_pointer::Axis::VerticalScroll,
+            10.0,
+            10,
+        );
+
+        data.virtual_pointer.as_ref().unwrap().button(
+            100,
+            2,
+            if pressed {
+                wl_pointer::ButtonState::Released.into()
+            } else {
+                wl_pointer::ButtonState::Pressed.into()
+            },
+        );
         std::thread::sleep(std::time::Duration::from_nanos(100));
     }
 }
