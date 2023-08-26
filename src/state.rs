@@ -1,4 +1,3 @@
-use std::{ffi::CString, fs::File, io::Write, path::PathBuf};
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1,
     zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
@@ -8,54 +7,25 @@ use wayland_protocols_wlr::virtual_pointer::v1::client::{
     zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1,
     zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1,
 };
-use xkbcommon::xkb;
 
 // This struct represents the state of our app. This simple app does not
 // need any state, by this type still supports the `Dispatch` implementations.
+#[derive(Debug)]
 pub struct AppData {
-    pub virtual_keyboard_manager: Option<ZwpVirtualKeyboardManagerV1>,
-    pub virtual_keyboard: Option<ZwpVirtualKeyboardV1>,
+    pub(crate) virtual_keyboard_manager: Option<ZwpVirtualKeyboardManagerV1>,
+    pub(crate) virtual_keyboard: Option<ZwpVirtualKeyboardV1>,
 
-    pub virtual_pointer_manager: Option<ZwlrVirtualPointerManagerV1>,
-    pub virtual_pointer: Option<ZwlrVirtualPointerV1>,
-    pub xkb_state: xkb::State,
+    pub(crate) virtual_pointer_manager: Option<ZwlrVirtualPointerManagerV1>,
+    pub(crate) virtual_pointer: Option<ZwlrVirtualPointerV1>,
 }
 
 impl AppData {
-    pub fn init() -> Self {
-        let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
-
-        let keymap = xkb::Keymap::new_from_names(
-            &context,
-            "",
-            "",
-            "us",
-            "",
-            None,
-            xkb::KEYMAP_COMPILE_NO_FLAGS,
-        )
-        .expect("xkbcommon keymap panicked!");
+    pub(crate) fn new() -> Self {
         Self {
             virtual_keyboard_manager: None,
             virtual_keyboard: None,
             virtual_pointer_manager: None,
             virtual_pointer: None,
-            xkb_state: xkb::State::new(&keymap),
         }
-    }
-    pub fn get_keymap_as_file(&mut self) -> (File, u32) {
-        let keymap = self
-            .xkb_state
-            .get_keymap()
-            .get_as_string(xkb::KEYMAP_FORMAT_TEXT_V1);
-        let keymap = CString::new(keymap).expect("Keymap should not contain interior nul bytes");
-        let keymap = keymap.as_bytes_with_nul();
-        let dir = std::env::var_os("XDG_RUNTIME_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(std::env::temp_dir);
-        let mut file = tempfile::tempfile_in(dir).expect("File could not be created!");
-        file.write_all(keymap).unwrap();
-        file.flush().unwrap();
-        (file, keymap.len() as u32)
     }
 }

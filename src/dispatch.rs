@@ -1,17 +1,7 @@
 use crate::AppData;
 use std::os::unix::prelude::AsRawFd;
-#[allow(unused)]
 use wayland_client::{
-    protocol::{
-        wl_buffer::{self, WlBuffer},
-        wl_compositor::{self, WlCompositor},
-        wl_keyboard,
-        wl_registry::{self, WlRegistry},
-        wl_seat::{self, WlSeat},
-        wl_shm::{self, WlShm},
-        wl_shm_pool::{self, WlShmPool},
-        wl_surface::{self, WlSurface},
-    },
+    protocol::{wl_keyboard, wl_registry, wl_seat::WlSeat, wl_shm::WlShm},
     Connection, Dispatch, Proxy, QueueHandle,
 };
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
@@ -19,11 +9,39 @@ use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
 };
 
+use std::{ffi::CString, fs::File, io::Write, path::PathBuf};
 use wayland_protocols_wlr::virtual_pointer::v1::client::{
     zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1,
     zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1,
 };
+use xkbcommon::xkb;
+pub fn get_keymap_as_file() -> (File, u32) {
+    let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
 
+    let keymap = xkb::Keymap::new_from_names(
+        &context,
+        "",
+        "",
+        "us",
+        "",
+        None,
+        xkb::KEYMAP_COMPILE_NO_FLAGS,
+    )
+    .expect("xkbcommon keymap panicked!");
+    let xkb_state = xkb::State::new(&keymap);
+    let keymap = xkb_state
+        .get_keymap()
+        .get_as_string(xkb::KEYMAP_FORMAT_TEXT_V1);
+    let keymap = CString::new(keymap).expect("Keymap should not contain interior nul bytes");
+    let keymap = keymap.as_bytes_with_nul();
+    let dir = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let mut file = tempfile::tempfile_in(dir).expect("File could not be created!");
+    file.write_all(keymap).unwrap();
+    file.flush().unwrap();
+    (file, keymap.len() as u32)
+}
 impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
     fn event(
         state: &mut Self,
@@ -82,7 +100,7 @@ impl Dispatch<WlSeat, ()> for AppData {
     ) {
         if let Some(virtual_keyboard_manager) = state.virtual_keyboard_manager.as_ref() {
             let virtual_keyboard = virtual_keyboard_manager.create_virtual_keyboard(seat, qh, ());
-            let (file, size) = state.get_keymap_as_file();
+            let (file, size) = get_keymap_as_file();
             virtual_keyboard.keymap(
                 wl_keyboard::KeymapFormat::XkbV1.into(),
                 file.as_raw_fd(),

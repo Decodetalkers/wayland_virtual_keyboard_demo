@@ -1,11 +1,94 @@
-use wayland_client::{protocol::wl_pointer, Connection};
+use wayland_client::{protocol::wl_pointer, Connection, EventQueue};
 
 mod dispatch;
 mod state;
 
-use state::AppData;
+pub use state::AppData;
 use wayland_client::protocol::wl_keyboard::KeyState;
-// The main function of our program
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum KeyPointerError {
+    #[error("Connection create Error")]
+    ConnectionError(String),
+    #[error("Error during queue")]
+    QueueError,
+}
+
+impl AppData {
+    pub fn init(queue: &mut EventQueue<Self>) -> Result<Self, KeyPointerError> {
+        let mut data = AppData::new();
+        while data.virtual_keyboard.is_none() || data.virtual_pointer.is_none() {
+            queue
+                .blocking_dispatch(&mut data)
+                .map_err(|_| KeyPointerError::QueueError)?;
+        }
+        Ok(data)
+    }
+
+    pub fn notify_pointer_motion(&self, dx: f64, dy: f64) {
+        self.virtual_pointer.as_ref().unwrap().motion(10, dx, dy);
+    }
+
+    pub fn notify_pointer_motion_absolute(&self, x: f64, y: f64, x_extent: u32, y_extent: u32) {
+        self.virtual_pointer
+            .as_ref()
+            .unwrap()
+            .motion_absolute(10, x as u32, y as u32, x_extent, y_extent);
+    }
+
+    pub fn notify_pointer_button(&self, button: i32, state: u32) {
+        self.virtual_pointer.as_ref().unwrap().button(
+            100,
+            button as u32,
+            if state == 0 {
+                wl_pointer::ButtonState::Pressed
+            } else {
+                wl_pointer::ButtonState::Released
+            },
+        );
+    }
+
+    pub fn notify_pointer_axis(&self, dx: f64, dy: f64) {
+        self.virtual_pointer
+            .as_ref()
+            .unwrap()
+            .axis(100, wl_pointer::Axis::HorizontalScroll, dx);
+        self.virtual_pointer
+            .as_ref()
+            .unwrap()
+            .axis(100, wl_pointer::Axis::VerticalScroll, dy);
+    }
+
+    pub fn notify_pointer_axis_discrete(&self, axis: u32, steps: i32) {
+        self.virtual_pointer.as_ref().unwrap().axis_discrete(
+            100,
+            if axis == 0 {
+                wl_pointer::Axis::VerticalScroll
+            } else {
+                wl_pointer::Axis::HorizontalScroll
+            },
+            10.0,
+            steps,
+        );
+    }
+
+    pub fn notify_keyboard_keycode(&self, keycode: i32, state: u32) {
+        self.virtual_keyboard
+            .as_ref()
+            .unwrap()
+            .key(100, keycode as u32, state);
+    }
+
+    pub fn notify_keyboard_keysym(&self, keysym: i32, state: u32) {
+        self.virtual_keyboard
+            .as_ref()
+            .unwrap()
+            .key(100, keysym as u32, state);
+    }
+}
+
 fn main() {
     // Create a Wayland connection by connecting to the server through the
     // environment-provided configuration.
@@ -17,7 +100,6 @@ fn main() {
     let display = conn.display();
 
     // Create an event queue for our event processing
-    // TODO: mut it
     let mut event_queue = conn.new_event_queue();
     // An get its handle to associated new objects to it
     let qh = event_queue.handle();
@@ -30,15 +112,13 @@ fn main() {
 
     // At this point everything is ready, and we just need to wait to receive the events
     // from the wl_registry, our callback will print the advertized globals.
-    let mut data = AppData::init();
-    while data.virtual_keyboard.is_none() || data.virtual_pointer.is_none() {
-        event_queue.blocking_dispatch(&mut data).unwrap();
-    }
+    let data = AppData::init(&mut event_queue).unwrap();
+
     let mut pressed = false;
+
     loop {
         pressed = !pressed;
-        data.virtual_keyboard.as_ref().unwrap().key(
-            100,
+        data.notify_keyboard_keycode(
             10,
             if pressed {
                 KeyState::Released.into()
@@ -47,22 +127,6 @@ fn main() {
             },
         );
 
-        data.virtual_pointer.as_ref().unwrap().axis_discrete(
-            100,
-            wl_pointer::Axis::VerticalScroll,
-            10.0,
-            10,
-        );
-
-        data.virtual_pointer.as_ref().unwrap().button(
-            100,
-            2,
-            if pressed {
-                wl_pointer::ButtonState::Released.into()
-            } else {
-                wl_pointer::ButtonState::Pressed.into()
-            },
-        );
         std::thread::sleep(std::time::Duration::from_nanos(100));
     }
 }

@@ -21,3 +21,4 @@ wayland-client = { version = "0.30.2"}
 wayland-protocols-misc = { version = "0.1.0", features = ["client"] }
 xkbcommon = "0.5.0"
 tempfile = "3.5.0"
+thiserror = "1.0.47"
